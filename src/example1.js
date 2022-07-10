@@ -94,6 +94,7 @@ const objects = []
 const createObjects = scene => {
   objects.push(createObject1(scene))
   objects.push(createObject3(scene))
+  // Deliberately add object2 last
   objects.push(createObject2(scene))
 }
 
