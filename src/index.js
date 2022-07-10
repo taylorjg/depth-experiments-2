@@ -1,4 +1,31 @@
 import * as THREE from "three"
+import { lookupConstant } from "./lookupConstant"
+
+const objectVertexShader = `
+// varying vec4 vPosition;
+
+void main() {
+  // vPosition = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);;
+}
+`
+
+const objectFragmentShader = `
+// varying vec4 vPosition;
+
+void main() {
+/*  
+  gl_FragColor.r = 0.0;
+  gl_FragColor.g = 0.0;
+  gl_FragColor.b = vPosition.z / vPosition.w;
+  gl_FragColor.a = 1.0;
+*/  
+  gl_FragColor.r = gl_FragCoord.z;
+  gl_FragColor.g = 0.0;
+  gl_FragColor.b = 0.0;
+  gl_FragColor.a = 1.0;
+}
+`
 
 const copyTextureVertexShader = `
 varying vec2 vUv;
@@ -9,22 +36,52 @@ void main() {
 }
 `
 
-const copyTextureFragmentShader = `
+const copyTextureFragmentShader1 = `
 varying vec2 vUv;
 
 uniform sampler2D tDepth;
 
 void main() {
   float depth = texture2D(tDepth, vUv).x;
-  gl_FragColor.rgb = vec3(depth);
+  // gl_FragColor.rgb = vec3(depth);
+  gl_FragColor.r = depth;
+  gl_FragColor.g = 0.0;
+  gl_FragColor.b = 0.0;
   gl_FragColor.a = 1.0;
 }
 `
 
-const WINDOW_SIZE = 10 // 250
+const copyTextureFragmentShader2 = `
+// src/renderers/shaders/ShaderChunk/packing.glsl.js
+#include <packing>
+
+varying vec2 vUv;
+
+uniform sampler2D tDepth;
+uniform float cameraNear;
+uniform float cameraFar;
+
+void main() {
+  float fragCoordZ = texture2D(tDepth, vUv).x;
+  float viewZ = perspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
+  // float depth = viewZToOrthographicDepth(viewZ, cameraNear, cameraFar);
+  // gl_FragColor.r = depth;
+  gl_FragColor.r = viewZ;
+  gl_FragColor.g = 0.0;
+  gl_FragColor.b = 0.0;
+  gl_FragColor.a = 1.0;
+}
+`
+
+// const WINDOW_SIZE = 10
+const WINDOW_SIZE = 250
 
 const makeObjectMaterial = color => {
-  return new THREE.MeshBasicMaterial({ color })
+  // return new THREE.MeshBasicMaterial({ color })
+  return new THREE.ShaderMaterial({
+    vertexShader: objectVertexShader,
+    fragmentShader: objectFragmentShader
+  })
 }
 
 const makeObject = (scene, color, size, z) => {
@@ -55,55 +112,6 @@ const createObjects = scene => {
   createObject3(scene)
 }
 
-// https://github.com/mrdoob/three.js/blob/master/src/constants.js
-const CONSTANTS = new Map([
-  [THREE.UVMapping, "UVMapping"], // 300
-  [THREE.CubeReflectionMapping, "CubeReflectionMapping"], // 301
-  [THREE.CubeRefractionMapping, "CubeRefractionMapping"], // 302
-  [THREE.EquirectangularReflectionMapping, "EquirectangularReflectionMapping"], // 303
-  [THREE.EquirectangularRefractionMapping, "EquirectangularRefractionMapping"], // 304
-  [THREE.CubeUVReflectionMapping, "CubeUVReflectionMapping"], // 306
-  [THREE.RepeatWrapping, "RepeatWrapping"], // 1000
-  [THREE.ClampToEdgeWrapping, "ClampToEdgeWrapping"], // 1001
-  [THREE.MirroredRepeatWrapping, "MirroredRepeatWrapping"], // 1002
-  [THREE.NearestFilter, "NearestFilter"], // 1003
-  [THREE.NearestMipmapNearestFilter, "NearestMipmapNearestFilter"], // 1004
-  [THREE.NearestMipmapLinearFilter, "NearestMipmapLinearFilter"], // 1005
-  [THREE.LinearFilter, "LinearFilter"], // 1006
-  [THREE.LinearMipmapNearestFilter, "LinearMipmapNearestFilter"], // 1007
-  [THREE.LinearMipmapLinearFilter, "LinearMipmapLinearFilter"], // 1008
-  [THREE.UnsignedByteType, "UnsignedByteType"], // 1009
-  [THREE.ByteType, "ByteType"], // 1010
-  [THREE.ShortType, "ShortType"], // 1011
-  [THREE.UnsignedShortType, "UnsignedShortType"], // 1012
-  [THREE.IntType, "IntType"], // 1013
-  [THREE.UnsignedIntType, "UnsignedIntType"], // 1014
-  [THREE.FloatType, "FloatType"], // 1015
-  [THREE.HalfFloatType, "HalfFloatType"], // 1016
-  [THREE.UnsignedShort4444Type, "UnsignedShort4444Type"], // 1017
-  [THREE.UnsignedShort5551Type, "UnsignedShort5551Type"], // 1018
-  [THREE.UnsignedInt248Type, "UnsignedInt248Type"], // 1020
-  [THREE.AlphaFormat, "AlphaFormat"], // 1021
-  [THREE.RGBFormat, "RGBFormat"], // 1022
-  [THREE.RGBAFormat, "RGBAFormat"], // 1023
-  [THREE.LuminanceFormat, "LuminanceFormat"], // 1024
-  [THREE.LuminanceAlphaFormat, "LuminanceAlphaFormat"], // 1025
-  [THREE.DepthFormat, "DepthFormat"], // 1026
-  [THREE.DepthStencilFormat, "DepthStencilFormat"], // 1027
-  [THREE.RedFormat, "RedFormat"], // 1028
-  [THREE.RedIntegerFormat, "RedIntegerFormat"], // 1029
-  [THREE.RGFormat, "RGFormat"], // 1030
-  [THREE.RGIntegerFormat, "RGIntegerFormat"], // 1031
-  [THREE.RGBAIntegerFormat, "RGBAIntegerFormat"], // 1033
-  [THREE.LinearEncoding, "LinearEncoding"], // 3000
-  [THREE.sRGBEncoding, "sRGBEncoding"], // 3001
-])
-
-const lookupConstant = value => {
-  const string = CONSTANTS.get(value) ?? "?"
-  return `${string} (${value})`
-}
-
 const dumpTexture = (label, texture) => {
   const textureDetails = {
     name: texture.name,
@@ -118,6 +126,10 @@ const dumpTexture = (label, texture) => {
   }
   console.log(`${label}:`)
   Object.entries(textureDetails).forEach(([key, value]) => console.log(`  ${key.padEnd(12)}: ${value}`))
+
+  // TODO: getRenderbufferParameter(GLenum target, GLenum pname)
+  // RENDERBUFFER_INTERNAL_FORMAT
+  // RENDERBUFFER_DEPTH_SIZE
 }
 
 const dumpPixels = (renderer, renderTarget, isFloat) => {
@@ -129,14 +141,14 @@ const dumpPixels = (renderer, renderTarget, isFloat) => {
   const buffer = new arrayType(length)
   renderer.readRenderTargetPixels(renderTarget, x, y, width, height, buffer)
   const uniqueValues = Array.from(new Set(buffer).values())
-  console.log("pixels:", buffer)
+  console.log(`pixels (${renderTarget.texture.name}):`, buffer)
   console.log("unique values:", uniqueValues)
 }
 
 const main = () => {
   const W = WINDOW_SIZE
   const H = WINDOW_SIZE
-  const DPR = 1 // window.devicePixelRatio
+  const DPR = 1
 
   const canvas = document.getElementById("canvas")
   canvas.style.width = `${W}px`
@@ -150,22 +162,23 @@ const main = () => {
 
   const mainScene = new THREE.Scene()
   const mainCamera = new THREE.PerspectiveCamera(45, W / H, 0.1, 50)
-  mainCamera.position.set(-5, -3, 8)
+  mainCamera.position.set(0, 0, 8)
   mainCamera.lookAt(0, 0, 3)
 
   createObjects(mainScene)
 
   const renderTarget1 = new THREE.WebGLRenderTarget(W * DPR, H * DPR)
   renderTarget1.name = "renderTarget1"
-  renderTarget1.texture.name = "Color Attachment"
+  renderTarget1.texture.name = "renderTarget1 Color Attachment"
+  renderTarget1.texture.type = THREE.FloatType
   renderTarget1.depthTexture = new THREE.DepthTexture()
-  renderTarget1.depthTexture.name = "Depth Attachment"
+  renderTarget1.depthTexture.name = "renderTarget1 Depth Attachment"
   dumpTexture("renderTarget1.texture", renderTarget1.texture)
   dumpTexture("renderTarget1.depthTexture", renderTarget1.depthTexture)
 
   const renderTarget2 = new THREE.WebGLRenderTarget(W * DPR, H * DPR, { depthBuffer: false })
   renderTarget2.name = "renderTarget2"
-  renderTarget2.texture.name = "Color Attachment"
+  renderTarget2.texture.name = "renderTarget2 Color Attachment"
   renderTarget2.texture.type = THREE.FloatType
   dumpTexture("renderTarget2.texture", renderTarget2.texture)
 
@@ -181,9 +194,11 @@ const main = () => {
 
   const orthMaterial = new THREE.ShaderMaterial({
     vertexShader: copyTextureVertexShader,
-    fragmentShader: copyTextureFragmentShader,
+    fragmentShader: copyTextureFragmentShader1,
     uniforms: {
-      tDepth: { value: renderTarget1.depthTexture }
+      tDepth: { value: renderTarget1.depthTexture },
+      cameraNear: { value: mainCamera.near },
+      cameraFar: { value: mainCamera.far }
     }
   })
 
@@ -193,7 +208,7 @@ const main = () => {
   const render = () => {
     renderer.setRenderTarget(renderTarget1)
     renderer.render(mainScene, mainCamera)
-    dumpPixels(renderer, renderTarget1, false)
+    dumpPixels(renderer, renderTarget1, true)
 
     renderer.setRenderTarget(renderTarget2)
     renderer.render(orthScene, orthCamera)
