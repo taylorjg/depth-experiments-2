@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { lookupConstant } from "./lookupConstant"
+import { dumpTexture, dumpPixels } from "./utils"
 
 const objectVertexShader = `
 void main() {
@@ -98,39 +98,6 @@ const createObjects = scene => {
   objects.push(createObject2(scene))
 }
 
-const dumpTexture = (label, texture) => {
-  const textureDetails = {
-    name: texture.name,
-    encoding: lookupConstant(texture.encoding),
-    format: lookupConstant(texture.format),
-    magFilter: lookupConstant(texture.magFilter),
-    minFilter: lookupConstant(texture.minFilter),
-    mapping: lookupConstant(texture.mapping),
-    type: lookupConstant(texture.type),
-    wrapS: lookupConstant(texture.wrapS),
-    wrapT: lookupConstant(texture.wrapT),
-  }
-  console.log(`${label}:`)
-  Object.entries(textureDetails).forEach(([key, value]) => console.log(`  ${key.padEnd(12)}: ${value}`))
-
-  // TODO: getRenderbufferParameter(GLenum target, GLenum pname)
-  // RENDERBUFFER_INTERNAL_FORMAT
-  // RENDERBUFFER_DEPTH_SIZE
-}
-
-const dumpPixels = (renderer, renderTarget, isFloat) => {
-  const x = 0
-  const y = 0
-  const { width, height } = renderTarget
-  const length = width * height * 4
-  const arrayType = isFloat ? Float32Array : Uint8Array
-  const buffer = new arrayType(length)
-  renderer.readRenderTargetPixels(renderTarget, x, y, width, height, buffer)
-  const uniqueValues = Array.from(new Set(buffer).values())
-  console.log(`pixels (${renderTarget.texture.name}):`, buffer)
-  console.log("unique values:", uniqueValues)
-}
-
 const main = () => {
   const canvas = document.getElementById("canvas")
   canvas.style.width = `${W}px`
@@ -196,7 +163,7 @@ const main = () => {
 
     renderer.setRenderTarget(renderTarget2)
     renderer.render(orthScene, orthCamera)
-    dumpPixels(renderer, renderTarget2, true)
+    dumpPixels(renderer, renderTarget2)
 
     renderer.setRenderTarget(null)
     renderer.render(mainScene, mainCamera)
