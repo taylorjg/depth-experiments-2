@@ -8,11 +8,16 @@ void main() {
 `
 
 const objectFragmentShader = `
+uniform vec3 color;
+uniform sampler2D tDepth;
+uniform vec2 resolution;
+
 void main() {
-  gl_FragColor.r = gl_FragCoord.z;
-  gl_FragColor.g = 0.0;
-  gl_FragColor.b = 0.0;
-  gl_FragColor.a = gl_FragCoord.w;
+  float thisFragDepth = gl_FragCoord.z;
+  vec2 uv = gl_FragCoord.xy / resolution;
+  float depthBufferDepth = texture2D(tDepth, uv).x;
+  if (thisFragDepth > depthBufferDepth) discard;
+  gl_FragColor = vec4(color, 1.0);
 }
 `
 
@@ -39,23 +44,37 @@ void main() {
 `
 
 const WINDOW_SIZE = 250
+const W = WINDOW_SIZE
+const H = WINDOW_SIZE
+const DPR = 1
 
-const makeObjectMaterial = color => {
-  return new THREE.MeshBasicMaterial({ color })
-  // return new THREE.ShaderMaterial({
-  //   vertexShader: objectVertexShader,
-  //   fragmentShader: objectFragmentShader
-  // })
+const makeObjectMaterial = (color, depthTest = true) => {
+  if (depthTest) {
+    return new THREE.MeshBasicMaterial({ color })
+  } else {
+    return new THREE.ShaderMaterial({
+      vertexShader: objectVertexShader,
+      fragmentShader: objectFragmentShader,
+      depthTest: false,
+      uniforms: {
+        color: { value: new THREE.Color(color) },
+        tDepth: { value: new THREE.Texture() },
+        resolution: { value: new THREE.Vector2(W * DPR, H * DPR) }
+      }
+    })
+  }
 }
 
-const makeObject = (scene, color, size, z) => {
+const makeObject = (scene, color, size, z, depthTest) => {
   const width = size
   const height = size
   const geometry = new THREE.PlaneBufferGeometry(width, height)
-  const material = makeObjectMaterial(color)
+  const material = makeObjectMaterial(color, depthTest)
   const mesh = new THREE.Mesh(geometry, material)
   mesh.translateZ(z)
+  mesh.name = color
   scene.add(mesh)
+  return mesh
 }
 
 const createObject1 = scene => {
@@ -63,17 +82,19 @@ const createObject1 = scene => {
 }
 
 const createObject2 = scene => {
-  return makeObject(scene, "MediumVioletRed", 4, 2)
+  return makeObject(scene, "MediumVioletRed", 4, 2, false)
 }
 
 const createObject3 = scene => {
   return makeObject(scene, "PaleVioletRed", 2, 3)
 }
 
+const objects = []
+
 const createObjects = scene => {
-  createObject1(scene)
-  createObject2(scene)
-  createObject3(scene)
+  objects.push(createObject1(scene))
+  objects.push(createObject3(scene))
+  objects.push(createObject2(scene))
 }
 
 const dumpTexture = (label, texture) => {
@@ -110,10 +131,6 @@ const dumpPixels = (renderer, renderTarget, isFloat) => {
 }
 
 const main = () => {
-  const W = WINDOW_SIZE
-  const H = WINDOW_SIZE
-  const DPR = 1
-
   const canvas = document.getElementById("canvas")
   canvas.style.width = `${W}px`
   canvas.style.height = `${H}px`
@@ -172,7 +189,9 @@ const main = () => {
   const render = () => {
     renderer.setRenderTarget(renderTarget1)
     renderer.render(mainScene, mainCamera)
-    // dumpPixels(renderer, renderTarget1, true)
+
+    const object2 = objects[2]
+    object2.material.uniforms.tDepth.value = renderTarget1.depthTexture
 
     renderer.setRenderTarget(renderTarget2)
     renderer.render(orthScene, orthCamera)
