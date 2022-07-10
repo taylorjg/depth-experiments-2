@@ -2,32 +2,21 @@ import * as THREE from "three"
 import { lookupConstant } from "./lookupConstant"
 
 const objectVertexShader = `
-// varying vec4 vPosition;
-
 void main() {
-  // vPosition = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);;
 }
 `
 
 const objectFragmentShader = `
-// varying vec4 vPosition;
-
 void main() {
-/*  
-  gl_FragColor.r = 0.0;
-  gl_FragColor.g = 0.0;
-  gl_FragColor.b = vPosition.z / vPosition.w;
-  gl_FragColor.a = 1.0;
-*/  
   gl_FragColor.r = gl_FragCoord.z;
   gl_FragColor.g = 0.0;
   gl_FragColor.b = 0.0;
-  gl_FragColor.a = 1.0;
+  gl_FragColor.a = gl_FragCoord.w;
 }
 `
 
-const copyTextureVertexShader = `
+const copyDepthTextureVertexShader = `
 varying vec2 vUv;
 
 void main() {
@@ -36,14 +25,12 @@ void main() {
 }
 `
 
-const copyTextureFragmentShader1 = `
+const copyDepthTextureFragmentShader = `
 varying vec2 vUv;
-
 uniform sampler2D tDepth;
 
 void main() {
   float depth = texture2D(tDepth, vUv).x;
-  // gl_FragColor.rgb = vec3(depth);
   gl_FragColor.r = depth;
   gl_FragColor.g = 0.0;
   gl_FragColor.b = 0.0;
@@ -51,37 +38,14 @@ void main() {
 }
 `
 
-const copyTextureFragmentShader2 = `
-// src/renderers/shaders/ShaderChunk/packing.glsl.js
-#include <packing>
-
-varying vec2 vUv;
-
-uniform sampler2D tDepth;
-uniform float cameraNear;
-uniform float cameraFar;
-
-void main() {
-  float fragCoordZ = texture2D(tDepth, vUv).x;
-  float viewZ = perspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
-  // float depth = viewZToOrthographicDepth(viewZ, cameraNear, cameraFar);
-  // gl_FragColor.r = depth;
-  gl_FragColor.r = viewZ;
-  gl_FragColor.g = 0.0;
-  gl_FragColor.b = 0.0;
-  gl_FragColor.a = 1.0;
-}
-`
-
-// const WINDOW_SIZE = 10
 const WINDOW_SIZE = 250
 
 const makeObjectMaterial = color => {
-  // return new THREE.MeshBasicMaterial({ color })
-  return new THREE.ShaderMaterial({
-    vertexShader: objectVertexShader,
-    fragmentShader: objectFragmentShader
-  })
+  return new THREE.MeshBasicMaterial({ color })
+  // return new THREE.ShaderMaterial({
+  //   vertexShader: objectVertexShader,
+  //   fragmentShader: objectFragmentShader
+  // })
 }
 
 const makeObject = (scene, color, size, z) => {
@@ -193,8 +157,8 @@ const main = () => {
   }
 
   const orthMaterial = new THREE.ShaderMaterial({
-    vertexShader: copyTextureVertexShader,
-    fragmentShader: copyTextureFragmentShader1,
+    vertexShader: copyDepthTextureVertexShader,
+    fragmentShader: copyDepthTextureFragmentShader,
     uniforms: {
       tDepth: { value: renderTarget1.depthTexture },
       cameraNear: { value: mainCamera.near },
@@ -208,7 +172,7 @@ const main = () => {
   const render = () => {
     renderer.setRenderTarget(renderTarget1)
     renderer.render(mainScene, mainCamera)
-    dumpPixels(renderer, renderTarget1, true)
+    // dumpPixels(renderer, renderTarget1, true)
 
     renderer.setRenderTarget(renderTarget2)
     renderer.render(orthScene, orthCamera)
