@@ -1,13 +1,13 @@
 import * as THREE from "three"
 import { dumpTexture, dumpPixels } from "./utils"
 
-const objectVertexShader = `
+const customVertexShader = `
 void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `
 
-const objectFragmentShader = `
+const customFragmentShader = `
 uniform vec3 color;
 uniform sampler2D tDepth;
 uniform vec2 resolution;
@@ -48,31 +48,34 @@ const W = WINDOW_SIZE
 const H = WINDOW_SIZE
 const DPR = 1
 
-const makeObjectMaterial = (color, depthTest = true) => {
-  if (depthTest) {
-    return new THREE.MeshBasicMaterial({ color })
-  } else {
-    return new THREE.ShaderMaterial({
-      vertexShader: objectVertexShader,
-      fragmentShader: objectFragmentShader,
-      depthTest: false,
-      uniforms: {
-        color: { value: new THREE.Color(color) },
-        tDepth: { value: new THREE.Texture() },
-        resolution: { value: new THREE.Vector2(W * DPR, H * DPR) }
-      }
-    })
-  }
+const makeBasicObjectMaterial = color => {
+  return new THREE.MeshBasicMaterial({ color })
 }
 
-const makeObject = (scene, color, size, z, depthTest) => {
+const makeCustomObjectMaterial = color => {
+  return new THREE.ShaderMaterial({
+    vertexShader: customVertexShader,
+    fragmentShader: customFragmentShader,
+    depthTest: false,
+    uniforms: {
+      color: { value: new THREE.Color(color) },
+      tDepth: { value: new THREE.Texture() },
+      resolution: { value: new THREE.Vector2(W * DPR, H * DPR) }
+    }
+  })
+}
+
+const makeObject = (scene, color, size, z, custom) => {
   const width = size
   const height = size
   const geometry = new THREE.PlaneBufferGeometry(width, height)
-  const material = makeObjectMaterial(color, depthTest)
+  const material = custom
+    ? makeCustomObjectMaterial(color)
+    : makeBasicObjectMaterial(color)
   const mesh = new THREE.Mesh(geometry, material)
   mesh.translateZ(z)
   mesh.name = color
+  mesh.layers.set(custom ? 1 : 0)
   scene.add(mesh)
   return mesh
 }
@@ -82,7 +85,7 @@ const createObject1 = scene => {
 }
 
 const createObject2 = scene => {
-  return makeObject(scene, "MediumVioletRed", 4, 2, false)
+  return makeObject(scene, "MediumVioletRed", 4, 2, true)
 }
 
 const createObject3 = scene => {
@@ -93,9 +96,8 @@ const objects = []
 
 const createObjects = scene => {
   objects.push(createObject1(scene))
-  objects.push(createObject3(scene))
-  // Deliberately add object2 last
   objects.push(createObject2(scene))
+  objects.push(createObject3(scene))
 }
 
 const main = () => {
@@ -156,16 +158,23 @@ const main = () => {
 
   const render = () => {
     renderer.setRenderTarget(renderTarget1)
+    // render only non-custom objects in this pass
+    mainCamera.layers.set(0)
     renderer.render(mainScene, mainCamera)
 
-    const object2 = objects[2]
-    object2.material.uniforms.tDepth.value = renderTarget1.depthTexture
+    for (const object of objects) {
+      if (object.layers.isEnabled(1)) {
+        object.material.uniforms.tDepth.value = renderTarget1.depthTexture
+      }
+    }
 
     renderer.setRenderTarget(renderTarget2)
     renderer.render(orthScene, orthCamera)
     dumpPixels(renderer, renderTarget2)
 
     renderer.setRenderTarget(null)
+    // render all objects in this pass
+    mainCamera.layers.enableAll()
     renderer.render(mainScene, mainCamera)
   }
 
