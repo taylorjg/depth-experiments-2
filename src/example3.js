@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { dumpTexture, dumpPixels } from "./utils"
+import { dumpTexture, } from "./utils"
 
 const customVertexShader = `
 void main() {
@@ -18,28 +18,6 @@ void main() {
   float depthBufferDepth = texture2D(tDepth, uv).x;
   if (thisFragDepth > depthBufferDepth) discard;
   gl_FragColor = vec4(color, 1.0);
-}
-`
-
-const copyDepthTextureVertexShader = `
-varying vec2 vUv;
-
-void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`
-
-const copyDepthTextureFragmentShader = `
-varying vec2 vUv;
-uniform sampler2D tDepth;
-
-void main() {
-  float depth = texture2D(tDepth, vUv).x;
-  gl_FragColor.r = depth;
-  gl_FragColor.g = 0.0;
-  gl_FragColor.b = 0.0;
-  gl_FragColor.a = 1.0;
 }
 `
 
@@ -122,59 +100,26 @@ const main = () => {
 
   createObjects(mainScene)
 
-  const renderTarget1 = new THREE.WebGLRenderTarget(W * DPR, H * DPR)
-  renderTarget1.name = "renderTarget1"
-  renderTarget1.texture.name = "renderTarget1 Color Attachment"
-  renderTarget1.texture.type = THREE.FloatType
-  renderTarget1.depthTexture = new THREE.DepthTexture()
-  renderTarget1.depthTexture.name = "renderTarget1 Depth Attachment"
-  dumpTexture("renderTarget1.texture", renderTarget1.texture)
-  dumpTexture("renderTarget1.depthTexture", renderTarget1.depthTexture)
-
-  const renderTarget2 = new THREE.WebGLRenderTarget(W * DPR, H * DPR, { depthBuffer: false })
-  renderTarget2.name = "renderTarget2"
-  renderTarget2.texture.name = "renderTarget2 Color Attachment"
-  renderTarget2.texture.type = THREE.FloatType
-  dumpTexture("renderTarget2.texture", renderTarget2.texture)
-
-  const makeOrthScene = (camera, material) => {
-    const quadWidth = camera.right - camera.left
-    const quadHeight = camera.top - camera.bottom
-    const quadGeometry = new THREE.PlaneBufferGeometry(quadWidth, quadHeight)
-    const quadMesh = new THREE.Mesh(quadGeometry, material)
-    const scene = new THREE.Scene()
-    scene.add(quadMesh)
-    return scene
-  }
-
-  const orthMaterial = new THREE.ShaderMaterial({
-    vertexShader: copyDepthTextureVertexShader,
-    fragmentShader: copyDepthTextureFragmentShader,
-    uniforms: {
-      tDepth: { value: renderTarget1.depthTexture },
-      cameraNear: { value: mainCamera.near },
-      cameraFar: { value: mainCamera.far }
-    }
-  })
-
-  const orthCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-  const orthScene = makeOrthScene(orthCamera, orthMaterial)
+  const renderTarget = new THREE.WebGLRenderTarget(W * DPR, H * DPR)
+  renderTarget.name = "renderTarget"
+  renderTarget.texture.name = "renderTarget Color Attachment"
+  renderTarget.texture.type = THREE.FloatType
+  renderTarget.depthTexture = new THREE.DepthTexture()
+  renderTarget.depthTexture.name = "renderTarget Depth Attachment"
+  dumpTexture("renderTarget.texture", renderTarget.texture)
+  dumpTexture("renderTarget.depthTexture", renderTarget.depthTexture)
 
   const render = () => {
-    renderer.setRenderTarget(renderTarget1)
+    renderer.setRenderTarget(renderTarget)
     // render regular objects in this pass
     mainCamera.layers.set(REGULAR_OBJECT_LAYER)
     renderer.render(mainScene, mainCamera)
 
     for (const object of objects) {
       if (object.layers.isEnabled(CUSTOM_OBJECT_LAYER)) {
-        object.material.uniforms.tDepth.value = renderTarget1.depthTexture
+        object.material.uniforms.tDepth.value = renderTarget.depthTexture
       }
     }
-
-    renderer.setRenderTarget(renderTarget2)
-    renderer.render(orthScene, orthCamera)
-    dumpPixels(renderer, renderTarget2)
 
     renderer.setRenderTarget(null)
     // render all objects in this pass
